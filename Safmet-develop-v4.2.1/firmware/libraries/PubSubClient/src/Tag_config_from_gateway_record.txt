@@ -1,0 +1,51 @@
+00>  30 30 30 32 33 30 35 37|00023057
+00> 
+00> <info> app: rssi -90
+00> 
+00> <info> app: send_tag_data 0x11
+00> 
+00> <info> app: Updating Config
+00> 
+00>  30 30 30 30 30 32 37 35|00000275
+00> 
+00> <info> app: Buz_interval 1
+00> 
+00> <info> app: send_tag_data 0x13
+00> 
+00>  30 30 30 32 35 36 31 38|00025618
+00> 
+00> <info> app: Buz_duartion 100
+00> 
+00> <info> app: send_tag_data 0x12
+00> 
+00>  30 35 32 34 33 31 36 30|05243160
+00> 
+00> <info> app: adv_interval : 80, adv_duration : 1
+00> 
+00> <info> app: send_tag_data 0x18
+00> 
+00> <info> app: Data Update Succ 90
+00> 
+00>  30 30 30 30 31 33 30 31|00001301
+00> 
+00> <info> app: enex_intrvl_value 5
+00> 
+00> <info> app: send_tag_data 0x15
+00> 
+00> <info> app: Updating Config
+00> 
+00> <info> app: Data Update Succ 5
+00> 
+00>  30 30 30 30 30 32 37 36|00000276
+00> 
+00> <info> app: scan_interval 1
+00> 
+00> <info> app: send_tag_data 0x14
+00> 
+00> <info> app: Updating Config
+00> 
+00> <info> app: Data Update Succ 1
+00> 
+00>  30 30 30 30 30 30 33 34|00000034
+00> 
+00> <info> app: send_tag_data 0x22

@@ -1,0 +1,510 @@
+@startuml check_for_ignore_uid.png
+:i=0;
+start
+repeat;
+  if (source_UID==I_UD.Ignore_UID[i]) then (yes);
+    :Print "ignore uid present : <source_UID";
+    :Store timestamp in green_led_timer;
+    :attachInterrupt(digitalPinToInterrupt(PIN_IRQ), DW1000Class::handleInterrupt, RISING);
+    :receiver();
+    :return false;
+    break
+  endif
+backward:i++;
+repeat while(i<3)
+stop
+@enduml
+@startuml receiver.png
+start
+:DW1000.newReceive();
+:DW1000.setDefaults();
+:DW1000.receivePermanently(true);
+:DW1000.startReceive();
+end
+@enduml
+@startuml transmit.png
+start
+:Store data from input arguments in send_data;
+:attachInterrupt(digitalPinToInterrupt(PIN_IRQ), DW1000Class::handleInterrupt, RISING);
+:yield();
+:Open a new transmit session :: DW1000.newTransmit(); 
+:Set Default configuration for DW1000 :: DW1000.setDefaults();
+if (packt_type == RANGE) then (yes);
+  :Compute delay time and store in deltaTime;
+  :Set the future timestamp of DW1000 packet going to be sent and also store it in timeRangeSent;
+  :Store the computed future timestamp as a byte array in send_data;
+endif
+if (packt_type == POLLACK) then (yes);
+  :Compute delay time and store in deltaTime;
+  :Set the future timestamp of DW1000 packet going to be sent;
+endif
+:Set the array data from send_data on DW1000;
+:Finally start the transmission;
+end
+@enduml
+@startuml awake_led_notification.png
+if (sleep_counter_led > 20) then (yes);
+  :sleep_counter_led=0;
+  :Turn GREEN_LED ON;
+  :delay(50);
+  :Print Battery Voltage;
+  if (bat_voltage <= BAT_LOW_ALERT) then (yes);
+    :Turn GREEN_LED ON;
+  else (no);
+    :Turn GREEN_LED OFF;
+  endif
+endif
+stop
+@enduml
+@startuml handleReceivedData.png
+start
+if (receivedAck and !sleep_act) then (yes)
+  :Reset Watchdog;
+  :`receivedAck`=false;
+  :Print "RXM"
+  :delay(random(0,10));
+  :received_packet();
+endif
+end
+@enduml
+@startuml handleSentData.png
+start
+if (sentAck and !sleep_act) then (yes);
+  :if (enter) then (yes);
+  :sleep_test--;
+  :enter=false;
+endif
+:counter=0;
+:Store system timestamp in listenModeActiveTime;
+:Reset Watchdog;
+:sentAck=false;
+:Print "TXM";
+:all_ok=true;
+:sent_packet(sent_packet_type);
+stop
+@enduml
+@startuml sendBeacon.png
+start
+if (millis() - lastBeaconTime > param.beacon_timeout) then (yes);
+  :gpio_defaults();
+  if (response_count <= 0) then (yes);
+    if (def TOUCH_ENABLE) then (yes);
+      if (checkTouchEnable()) then (no);
+        :return;
+        stop
+      endif
+    endif
+    :packt_id++;
+    :Print "BEACON";
+    :delay(random(0,50));
+    :transmit(BROADCAST, packt_id, broadcast_address, payload, 0);
+    :Store system timestamp in lastBeaconTime;
+    :Store system timestamp in listenModeActiveTime;
+  endif
+endif
+if ((!receivedAck && !sentAck) && (millis() - listenModeActiveTime > listen_time) && (response_count > 0));
+  :transmit(POLL, packt_id, source_uids_array[response_count - 1], payload, 0);
+  :Store system time in listenModeActiveTime;
+  :response_count--;
+endif
+stop
+@enduml
+@startuml beacon_receive_func.png
+start
+if (received_packet_type == ACK) then (yes);
+  :handleAckRx()
+  stop
+elseif (received_packet_type == POLLACK) then (yes);
+  :handlePollAckRx()
+  stop
+elseif (received_packet_type == RANGEREPORT) then (yes);
+  :handleRangeReportRx()
+  stop
+else (default);
+  :default: attachInterrupt(digitalPinToInterrupt(PIN_IRQ), DW1000Class::handleInterrupt, RISING);
+  stop
+endif
+stop
+@enduml
+@startuml check_dest_uid.png
+start
+if (rec_des_uid == device_ID) then (yes);
+  :attachInterrupt(digitalPinToInterrupt(PIN_IRQ), DW1000Class::handleInterrupt, RISING);
+  :receiver();
+  :return false;
+endif
+stop
+@enduml
+@startuml check_for_ignore_uid.png
+:i=0;
+start
+repeat;
+  if (source_UID==I_UD.Ignore_UID[i]) then (yes);
+    :Print "ignore uid present : <source_UID";
+    :Store timestamp in green_led_timer;
+    :attachInterrupt(digitalPinToInterrupt(PIN_IRQ), DW1000Class::handleInterrupt, RISING);
+    :receiver();
+    :return false;
+    break
+  endif
+backward:i++;
+repeat while(i<3)
+stop
+@enduml
+@startuml check_for_nid.png
+start
+if (network == device.Net_ID) then (yes);
+  :Print "net id matched";
+  :return true;
+  stop
+endif
+:attachInterrupt(digitalPinToInterrupt(PIN_IRQ), DW1000Class::handleInterrupt, RISING);
+:delay(20);
+:Print "Nid_Not_M";
+:return false;
+stop
+@enduml
+@startuml check_for_sid.png
+start
+:x=0;
+repeat
+  if (def DEBUG) then (yes);
+    :Print <x>;
+    :Print dist_para.dist_SID[x];
+    :Print "sub_network : sub_network";
+  endif
+  if (sub_network == dist_para.dist_SID[x] >> 16) then (yes);
+    :sid_index=x;
+    :return true;
+    stop
+  endif
+backward:x++;
+repeat while (x < sizeof(dist) / 4) then (yes);
+:Print "No Sid registered";
+:sleep_counter_led++;
+:delay(20);
+:receiver();
+:return false;
+stop
+@enduml
+@startuml handleBroadcastRx.png
+start
+:network = (data[1] << 8) | data[2];
+:sub_network = (data[3] << 8) | data[4];
+if (check_for_nid()) then (no);
+  stop
+endif
+if (check_for_ignore_uid()) then (yes);
+  stop
+endif
+if (check_for_sid()) then (yes);
+  stop
+endif
+:Store timestamp in `listenModeActiveTime`;
+:transmit(ACK, packt_id, source_UID, payload, 0);
+stop
+@enduml
+@startuml handlePollAckRx.png
+if (check_src_uid(source_UID)) then (no);
+  stop
+endif
+if (check_dest_uid(destination_UID)) then (no);
+  stop
+endif
+:Store Received data timestamp in `timePollAckReceived`;
+:Store timestamp in listenModeActiveTime;
+:Send Range :: sendRange();
+stop
+@enduml
+@startuml handlePollRx.png
+start
+if (check_dest_uid(destination_UID)) then (no);
+  stop
+endif
+:current_active_src_uid = source_UID;
+:timePollReceived = rx_time;
+:Store system timestamp in `listenModeActiveTime`;
+:transmit(POLLACK, packt_id, source_UID, payload, 0);
+stop
+@enduml
+@startuml handleRangeReportRx.png
+start
+if (check_src_uid(source_UID)) then (no);
+  :return;
+  stop
+endif
+if (!check_dest_uid(destination_UID)) then (no);
+  :return;
+  stop
+endif
+:Store Range in #curRange;
+if (curRange < 8) then (yes);
+  :Turn VIB_MOTOR ON;
+endif
+:Turn GREEN_LED ON;
+:Print "Range_rep from : <dist_para.dist_SID[sid_index] >> 16><curRange>";
+:distance = curRange;
+stop
+@enduml
+@startuml received_packet.png
+start
+:Store received data on DW1000 :: DW1000.getData(data,LEN_DATA);
+:Obtain ReceiveTimestamp :: DW1000.getReceiveTimestamp(rx_time);
+:Store received packet type in received_packet_type;
+if(def DEBUG) then (yes);
+  :Print "rece pa : <received_packet_type>";
+endif
+:Get Source UID;
+if(def DEBUG) then (yes);
+  :Print "source uid : <source_UID>";
+endif
+:Get Destination UID;
+if(def DEBUG) then (yes);
+  :Print "dest uid : <destination_UID>";
+endif
+:beacon_receive_func();
+stop
+@enduml
+@startuml receiver.png
+start
+:DW1000.newReceive();
+:DW1000.setDefaults();
+:DW1000.receivePermanently(true);
+:DW1000.startReceive();
+end
+@enduml
+@startuml loop.png
+:awake_led_notification();
+:check_power();
+:check_vbat();
+:handleReceivedData();
+:handleSentData();
+:sendBeacon();
+@enduml
+@startuml reInitDeca.png
+start
+:Reset Watchdog;
+:Turn ATTINY_GPIO HIGH;
+:Turn ATTINY_GPIO LOW;
+:DW1000 wake up SPI :: DW1000.spiWakeup();
+:delay(2);
+:DW1000.begin(PIN,IRQ, PIN_RST);
+:DW1000.select(PIN_SS);
+:DW1000.newConfiguration();
+:DW1000.setDefaults();
+:DW1000.setDeviceAddress(1);
+:DW1000.setNetworkId(10);
+:DW1000.enableMode(DW1000.MODE_SHORTDATA_FAST_ACCURACY); //MODE_SHORTDATA_FAST_ACCURACY);
+:DW1000.commitConfiguration();
+:DW1000.attachSentHandler(handleSent);
+:DW1000.attachReceivedHandler(handleReceived);
+:receiver();
+:fill_default_transmit();
+stop
+@enduml
+@startuml setup.png
+start
+:pinSetup();
+:serialSetup();
+:Enable Watchdog :: wdt_enable(WDTO_2S);
+:Check Battery voltage :: check_vbat();
+:Check for Input Power :: check_power();
+:Reset the Watchdog :: wdt_reset();
+:Initialize Decawave :: decawaveInit();
+:setupDeviceSettings();
+:delay(50);
+group Attach Interrupts for Decawave
+  :DW1000.attachSentHandler(handleSent);
+  :DW1000.attachReceivedHandler(handleReceived);
+endgroup
+:Initialize Decawave receiver :: receiver();
+:Reset the Watchdog :: wdt_reset();
+:fill_default_transmit();
+:Print Settings of Device stored in Flash :: printFlashSettings();
+end
+@enduml
+@startuml check_power.png
+start
+:Reset Watchdog;
+:Set analogReference to DEFAULT;
+:Set ChargingFlag and ChargedFlag to false;
+:Initialize VoltHistCount;
+repeat
+  :ChargingFlag=true;
+  :Reset Watchdog;
+  :setGPIOsStateOnCharging();
+  if (ChargedFlag) then (yes);
+    :Turn GREEN_LED ON;
+  endif
+  if (millis() - printtime > 1 second) then (yes);
+    :Print "power on";
+    :Store system timestamp in printtime;
+    :Set VBAT_ADC to INPUT;
+    :Set analogReference to INTERNAL;
+    :Calculate battery voltage from VBAT_ADC output;
+    :Print Battery Voltage;
+  endif
+  if (millis() - VoltHistoryTime > 10000) then (yes);
+    :Store system timestamp in VoltHistoryTime;
+    :Set VBAT_ADC to INPUT;
+    :Set analogReference to INTERNAL;
+    :Calculate battery voltage;
+    :Store Battery Voltage in VoltHist[VoltHistCount];
+    :Print "<VoltHistCount>: Noting Voltage;
+    :VoltHistCount = VoltHistCount + 1;
+    if (VoltHistCount % 10 == 0) then (yes);
+      :VoltHistCount=0;
+      :ChargedFlag=true;
+      :Run for loop where it is checked if latest reading in VoltHist exceeds 4V or is increasing;
+      if (VoltHist is greater than 4V or increasing) then (yes);
+        :ChargedFlag = false;
+        :Print "Still Charging & Battery Voltage < 4V";
+        stop
+      endif
+      :Reset Watchdog;
+      if(ChargedFlag) then (no);
+        :Turn GREEN_LED OFF;
+        :Print "Charging!";
+      else (yes)
+        :Turn GREEN_LED ON;
+        :Print Fully Charged, disconnect charger now;
+      endif
+    endif
+  endif
+repeat while(analogRead(PWR_ADC) < 800)
+if (ChargingFlag) then (yes);
+  :ChargingFlag=false;
+  :Turn ATTINY_GPIO HIGH then LOW in an interval of 100ms once;
+  :Turn GREEN_LED OFF;
+endif
+:Turn SCL_VCC HIGH;
+stop
+@enduml
+@startuml check_vbat.png
+start
+if (current time - last time Voltage was printed through function is greater than 1 second) then (yes);
+  :Print "Check Bat Voltage";
+  :Store current time in `printtime`;
+  :Set analogReference as Internal :: analogReference(INTERNAL);
+  :volt = analogRead(VBAT_ADC) * 1.1 / 1023.00;
+  :bat_voltage = (volt * (VD_R1 + VD_R2) / (VD_R2));
+  :Print "Battery Voltage 3 :: `bat_voltage`";
+  if (bat_voltage <= BAT_LOW_ALERT) then (yes);
+    :Print "*******************LOW_BAT*******************";
+    :Turn GREEN_LED ON;
+  else (no);
+    :Turn GREEN_LED OFF;
+  endif
+endif
+end
+@enduml
+@startuml decawaveInit.png
+start
+:Begin Decawave and set Interrupt and Reset Pin :: DW1000.begin(PIN_IRQ, PIN_RST);
+:Set SPI Select PIN as PIN_SS for DW1000;
+:Reset the DW1000;
+:Print "DW1000 initializing ..."; 
+:DW1000.newConfiguration();
+:DW1000.setDefaults();
+:DW1000.setDeviceAddress(1);
+:DW1000.setNetworkId(10);
+:DW1000.enableMode(DW1000.MODE_SHORTDATA_FAST_ACCURACY);
+:DW1000.commitConfiguration();
+end
+@enduml
+@startuml serialSetup.png
+start
+:Initialize Serial at baudrate 115200;
+:Print Git Tag details in format `tag-numberOfCommitsAhead-gCommitID-dirty/clean`;
+end
+@enduml
+@startuml setGPIOsStateOnCharging.png
+start
+:Set SCL_VCC to LOW;
+:Turn GREEN_LED OFF;
+:Set VIB_MOTOR to LOW;
+end
+@enduml
+@startuml setupDeviceSettings.png
+start
+:Set 4 byte device_ID;
+:Set Sub_Net_ID;
+:Set Net_ID;
+:Set param.beacon_timeout;
+:Set Ignore_UIDs as 0xFFFFFFFF
+:Set sleep_timeout, temp_near, temp_emerg, dist_n_f, dist_e_f, dist_n_f_f, dist_e_f_f as 0xFF;
+if (def DEBUG_SETTINGS) then (yes);
+  :Print sleep_timeout, temp_near, temp_emerg, dist_n_f, dist_e_f, dist_n_f_f, dist_e_f_f;
+endif
+stop
+@enduml
+@startuml computeRangeAsymmetric.png
+start
+:round1 = (timePollAckReceived-timePollSent); 
+:reply1 = (timePollAckSent - timePollReceived); 
+:round2 = (timeRangeReceived - timePollAckSent); 
+:reply2 = (timeRangeSent - timePollAckReceived);
+:tof = (round1 * round2 - reply1 * reply2) / (round1 + round2 + reply1 + reply2);
+:Compute range :: timeComputedRange.setTimestamp(tof);
+end
+@enduml
+@startuml receiver.png
+start
+:DW1000.newReceive();
+:DW1000.setDefaults();
+:DW1000.receivePermanently(true);
+:DW1000.startReceive();
+end
+@enduml
+@startuml sendRange.png
+start
+:Print "sent range";
+:Turn GREEN_LED ON;
+:Set sleep_counter_led to 0;
+:Reset the watchdog;
+:Obtain System Timestamp;
+:Store timePollSent as byte array in payload;
+:Store timePollAckReceived as byte array in payload[5:];
+:Store timeRangeSent as byte array in payload[10:];
+:Perform a Range transmission;
+end
+@enduml
+@startuml sent_packet.png
+start
+if (snt_pkt?) then (BROADCAST)
+  :noteActivity();
+elseif (ACK) 
+  :noteActivity();
+elseif (POLL)
+  :get DW1000 Transmission Timestamp from timePollSent;
+  :noteActivity();
+elseif (POLLACK)
+  :get DW1000 Transmission Timestamp from timePollAckSent;
+  :noteActivity();
+elseif (RANGE)
+  :get DW1000 Transmission Timestamp from timeRangeSent;
+  :noteActivity();
+elseif (RANGEREPORT)
+endif
+stop
+@enduml
+@startuml transmit.png
+start
+:Store data from input arguments in send_data;
+:attachInterrupt(digitalPinToInterrupt(PIN_IRQ), DW1000Class::handleInterrupt, RISING);
+:yield();
+:Open a new transmit session :: DW1000.newTransmit(); 
+:Set Default configuration for DW1000 :: DW1000.setDefaults();
+if (packt_type == RANGE) then (yes);
+  :Compute delay time and store in deltaTime;
+  :Set the future timestamp of DW1000 packet going to be sent and also store it in timeRangeSent;
+  :Store the computed future timestamp as a byte array in send_data;
+endif
+if (packt_type == POLLACK) then (yes);
+  :Compute delay time and store in deltaTime;
+  :Set the future timestamp of DW1000 packet going to be sent;
+endif
+:Set the array data from send_data on DW1000;
+:Finally start the transmission;
+end
+@enduml
